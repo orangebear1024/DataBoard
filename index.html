@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DataBoard 数据可视化看板</title>
+<!-- ECharts 5.4.x CDN（国内稳定源） -->
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<style>
+/* ============================================================
+   DataBoard 数据看板 — 全局样式 & 设计系统
+   ============================================================ */
+
+:root {
+  /* 配色系统 */
+  --bg-primary: #0a192f;
+  --bg-panel: rgba(6, 30, 60, 0.75);
+  --border-glow: rgba(0, 212, 255, 0.25);
+  --color-accent: #00d4ff;
+  --color-purple: #7c3aed;
+  --color-green: #10b981;
+  --color-orange: #f59e0b;
+  --color-pink: #ec4899;
+  --text-primary: #e0e8f0;
+  --text-secondary: #8899aa;
+  --text-muted: #556677;
+  --font-mono: 'Consolas', 'Courier New', monospace;
+  /* 大屏基准分辨率 */
+  --design-width: 1920;
+  --design-height: 1080;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Microsoft YaHei', 'PingFang SC', 'Helvetica Neue', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 背景装饰：网格 + 光晕 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(0, 212, 255, 0.04) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 70%, rgba(124, 58, 237, 0.04) 0%, transparent 60%),
+    radial-gradient(ellipse at 50% 80%, rgba(16, 185, 129, 0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 网格线背景 */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 主容器：按 1920×1080 设计，等比缩放适配 */
+#app {
+  width: 1920px;
+  height: 1080px;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 20px 8px;
+  gap: 10px;
+  transform-origin: center center;
+}
+
+/* ============================================================
+   一、顶部标题栏
+   ============================================================ */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 80px;
+  padding: 0 20px;
+  position: relative;
+}
+
+/* 标题发光 */
+.header__title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  background: linear-gradient(180deg, #e0f0ff 0%, #00d4ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none;
+  filter: drop-shadow(0 0 18px rgba(0, 212, 255, 0.5));
+  position: relative;
+  white-space: nowrap;
+}
+.header__title::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-accent), transparent);
+}
+
+/* 中间KPI指标 */
+.header__kpis {
+  display: flex;
+  gap: 40px;
+  align-items: center;
+}
+.kpi-item { text-align: center; }
+.kpi-item__value {
+  font-size: 30px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: #fff;
+  text-shadow: 0 0 12px rgba(0, 212, 255, 0.6);
+}
+.kpi-item__label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  letter-spacing: 2px;
+}
+
+/* 右侧时间 */
+.header__time {
+  text-align: right;
+  white-space: nowrap;
+}
+.header__time .time {
+  font-size: 26px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--color-accent);
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+}
+.header__time .date {
+  font-size: 13px;
+  color: var(--text-secondary);
+  letter-spacing: 1px;
+}
+
+/* ============================================================
+   二、主体区域 — 左中右三栏
+   ============================================================ */
+.main {
+  flex: 1;
+  display: flex;
+  gap: 16px;
+  min-height: 0;
+}
+
+/* ---- 通用面板样式 ---- */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glow);
+  border-radius: 6px;
+  padding: 12px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(4px);
+}
+/* 面板发光边框 */
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 7px;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(0,212,255,0.3), transparent 40%, transparent 60%, rgba(0,212,255,0.2));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.panel__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-accent);
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  padding-left: 10px;
+  position: relative;
+  flex-shrink: 0;
+}
+.panel__title::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 2px; bottom: 2px;
+  width: 3px;
+  background: var(--color-accent);
+  border-radius: 2px;
+  box-shadow: 0 0 6px var(--color-accent);
+}
+.panel__chart {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 面板入场动画 */
+.panel {
+  animation: panelFadeIn 0.8s ease both;
+}
+@keyframes panelFadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- 左侧栏 ---- */
+.sidebar-left {
+  width: 25%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sidebar-left .panel { flex: 1; }
+.sidebar-left .panel:nth-child(1) { animation-delay: 0.1s; }
+.sidebar-left .panel:nth-child(2) { animation-delay: 0.2s; }
+
+/* ---- 中间主视觉区 ---- */
+.center-area {
+  width: 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.center-area .panel { flex: 1; }
+
+/* KPI 卡片行 */
+.kpi-cards {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+  height: 110px;
+}
+.kpi-card {
+  flex: 1;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glow);
+  border-radius: 6px;
+  padding: 14px 16px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  backdrop-filter: blur(4px);
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 7px;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(0,212,255,0.3), transparent 40%, transparent 60%, rgba(0,212,255,0.2));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.kpi-card__icon {
+  font-size: 28px;
+}
+.kpi-card__value {
+  font-size: 32px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: #fff;
+}
+.kpi-card__label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  letter-spacing: 1px;
+}
+.kpi-card__trend {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.kpi-card__trend.up { color: var(--color-green); }
+.kpi-card__trend.down { color: #ef4444; }
+.kpi-card:nth-child(1) { animation: panelFadeIn 0.8s 0.15s both; }
+.kpi-card:nth-child(2) { animation: panelFadeIn 0.8s 0.25s both; }
+.kpi-card:nth-child(3) { animation: panelFadeIn 0.8s 0.35s both; }
+.kpi-card:nth-child(4) { animation: panelFadeIn 0.8s 0.45s both; }
+
+/* 中心区域面板延迟 */
+.center-area .panel:nth-child(2) { animation-delay: 0.3s; }
+.center-area .panel:nth-child(3) { animation-delay: 0.4s; }
+
+/* ---- 右侧栏 ---- */
+.sidebar-right {
+  width: 25%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sidebar-right .panel { flex: 1; }
+.sidebar-right .panel:nth-child(1) { animation-delay: 0.25s; }
+.sidebar-right .panel:nth-child(2) { animation-delay: 0.35s; }
+
+/* ============================================================
+   三、底部状态栏
+   ============================================================ */
+.footer {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-top: 1px solid rgba(0, 212, 255, 0.1);
+  letter-spacing: 1px;
+  flex-shrink: 0;
+}
+.footer__update {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.footer__update .dot {
+  width: 6px; height: 6px;
+  background: var(--color-green);
+  border-radius: 50%;
+  animation: dotPulse 2s infinite;
+}
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--color-green); }
+  50% { opacity: 0.3; box-shadow: 0 0 2px var(--color-green); }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ========== 顶部标题栏 ========== -->
+  <header class="header">
+    <div class="header__title">DataBoard 数据可视化看板</div>
+    <div class="header__kpis">
+      <div class="kpi-item">
+        <div class="kpi-item__value" id="kpi-visits">1,285,430</div>
+        <div class="kpi-item__label">总访问量</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-item__value" id="kpi-sales">86,542,100</div>
+        <div class="kpi-item__label">总交易额（元）</div>
+      </div>
+      <div class="kpi-item">
+        <div class="kpi-item__value" id="kpi-users">52,880</div>
+        <div class="kpi-item__label">活跃用户数</div>
+      </div>
+    </div>
+    <div class="header__time">
+      <div class="time" id="clock">00:00:00</div>
+      <div class="date" id="dateStr">2026-07-07 星期二</div>
+    </div>
+  </header>
+
+  <!-- ========== 主体三栏 ========== -->
+  <div class="main">
+    <!-- 左侧栏 -->
+    <aside class="sidebar-left">
+      <div class="panel">
+        <div class="panel__title">📈 近7天数据趋势</div>
+        <div class="panel__chart" id="chart-trend"></div>
+      </div>
+      <div class="panel">
+        <div class="panel__title">🍩 业务分类占比</div>
+        <div class="panel__chart" id="chart-donut"></div>
+      </div>
+    </aside>
+
+    <!-- 中间主视觉区 -->
+    <main class="center-area">
+      <!-- KPI 卡片行 -->
+      <div class="kpi-cards">
+        <div class="kpi-card">
+          <div class="kpi-card__icon">👥</div>
+          <div class="kpi-card__value" id="card-new-users">12,580</div>
+          <div class="kpi-card__label">新增用户</div>
+          <div class="kpi-card__trend up">▲ 12.5%</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card__icon">📦</div>
+          <div class="kpi-card__value" id="card-orders">8,642</div>
+          <div class="kpi-card__label">订单总量</div>
+          <div class="kpi-card__trend up">▲ 8.3%</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card__icon">💬</div>
+          <div class="kpi-card__value" id="card-msgs">3,215</div>
+          <div class="kpi-card__label">咨询消息</div>
+          <div class="kpi-card__trend down">▼ 3.1%</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-card__icon">⭐</div>
+          <div class="kpi-card__value" id="card-rate">98.6<small style="font-size:16px">%</small></div>
+          <div class="kpi-card__label">满意度</div>
+          <div class="kpi-card__trend up">▲ 0.8%</div>
+        </div>
+      </div>
+      <!-- 组合柱状折线图 -->
+      <div class="panel">
+        <div class="panel__title">📊 核心业务数据对比</div>
+        <div class="panel__chart" id="chart-combo"></div>
+      </div>
+      <!-- 中国地图 -->
+      <div class="panel">
+        <div class="panel__title">🗺️ 全国省份数据热力分布</div>
+        <div class="panel__chart" id="chart-map"></div>
+      </div>
+    </main>
+
+    <!-- 右侧栏 -->
+    <aside class="sidebar-right">
+      <div class="panel">
+        <div class="panel__title">🏆 城市数据 TOP10</div>
+        <div class="panel__chart" id="chart-rank"></div>
+      </div>
+      <div class="panel">
+        <div class="panel__title">📡 渠道来源分析</div>
+        <div class="panel__chart" id="chart-radar"></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ========== 底部状态栏 ========== -->
+  <footer class="footer">
+    <div class="footer__update">
+      <span class="dot"></span> 数据更新时间：<span id="update-time">--</span>
+    </div>
+    <div>数据来源：DataBoard 模拟数据系统 ｜ 仅供学习参考</div>
+    <div>© 2026 DataBoard 数据看板 ｜ MIT License</div>
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   DataBoard 数据看板 — 主脚本
+   所有图表逻辑、数据模拟、自适应缩放均在此内联
+   ============================================================ */
+
+// ==============================================================
+// 零、全局配置 & 工具函数
+// ==============================================================
+
+/** 统一配色 — 集中定义，方便二次修改 */
+const COLORS = {
+  blue:   '#00d4ff',
+  purple: '#7c3aed',
+  green:  '#10b981',
+  orange: '#f59e0b',
+  pink:   '#ec4899',
+  cyan:   '#06b6d4',
+  yellow: '#eab308',
+  red:    '#ef4444',
+  get palette() {
+    return [this.blue, this.green, this.orange, this.purple, this.pink, this.cyan, this.yellow];
+  }
+};
+
+/** 通用 ECharts 文本样式 */
+function textStyle(size = 12, color = '#8899aa') {
+  return { fontSize: size, color };
+}
+
+/** 通用 tooltip 配置 */
+function tooltipStyle() {
+  return {
+    backgroundColor: 'rgba(6, 30, 60, 0.95)',
+    borderColor: 'rgba(0, 212, 255, 0.3)',
+    textStyle: { color: '#e0e8f0', fontSize: 13 }
+  };
+}
+
+/** 数字滚动动画 — 将元素值从当前滚动到目标值 */
+function animateNumber(el, target, duration = 1200) {
+  const start = parseInt(el.textContent.replace(/[^0-9.-]/g, '')) || 0;
+  const isFloat = target % 1 !== 0;
+  const decimals = isFloat ? 1 : 0;
+  const startTime = performance.now();
+
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    // ease-out
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = start + (target - start) * eased;
+    el.textContent = isFloat
+      ? current.toFixed(decimals)
+      : Math.floor(current).toLocaleString();
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/** 格式化数字（带逗号） */
+function fmt(n) { return n.toLocaleString(); }
+
+// ==============================================================
+// 一、实时时钟
+// ==============================================================
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2, '0');
+  const m = String(now.getMinutes()).padStart(2, '0');
+  const s = String(now.getSeconds()).padStart(2, '0');
+  document.getElementById('clock').textContent = `${h}:${m}:${s}`;
+
+  const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+  const y = now.getFullYear();
+  const mon = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  document.getElementById('dateStr').textContent =
+    `${y}-${mon}-${d} 星期${weekdays[now.getDay()]}`;
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ==============================================================
+// 二、模拟数据生成器
+// ==============================================================
+
+/** 生成带微小波动的时序数据 */
+function genSeriesData(base, count, variance = 0.15) {
+  return Array.from({ length: count }, () =>
+    Math.round(base * (1 + (Math.random() - 0.5) * variance * 2))
+  );
+}
+
+// ==============================================================
+// 三、图表初始化公共方法
+// ==============================================================
+const charts = {}; // 存储所有图表实例，用于 resize
+function initChart(domId) {
+  const dom = document.getElementById(domId);
+  if (!dom) return null;
+  const chart = echarts.init(dom);
+  charts[domId] = chart;
+  return chart;
+}
+
+// ==============================================================
+// 四、左侧 — 近7天数据趋势折线图
+// ==============================================================
+(function initTrendChart() {
+  const chart = initChart('chart-trend');
+  if (!chart) return;
+
+  const days = ['7/1', '7/2', '7/3', '7/4', '7/5', '7/6', '7/7'];
+  const dataWeb = genSeriesData(8200, 7, 0.2);
+  const dataApp = genSeriesData(6200, 7, 0.25);
+  const dataApi = genSeriesData(4500, 7, 0.3);
+
+  chart.setOption({
+    tooltip: {
+      ...tooltipStyle(),
+      trigger: 'axis'
+    },
+    legend: {
+      right: 0, top: 0,
+      textStyle: textStyle(11),
+      itemWidth: 14, itemHeight: 8
+    },
+    grid: { left: 8, right: 8, top: 32, bottom: 4, containLabel: true },
+    xAxis: {
+      type: 'category', data: days,
+      axisLine: { lineStyle: { color: 'rgba(0,212,255,0.2)' } },
+      axisTick: { show: false },
+      axisLabel: textStyle(10)
+    },
+    yAxis: {
+      type: 'value',
+      splitLine: { lineStyle: { color: 'rgba(0,212,255,0.08)' } },
+      axisLabel: textStyle(10)
+    },
+    series: [
+      {
+        name: 'Web端', type: 'line', data: dataWeb, smooth: true,
+        symbol: 'circle', symbolSize: 6,
+        lineStyle: { width: 2, color: COLORS.blue },
+        itemStyle: { color: COLORS.blue },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(0,212,255,0.3)' },
+            { offset: 1, color: 'rgba(0,212,255,0.02)' }
+          ])
+        }
+      },
+      {
+        name: 'App端', type: 'line', data: dataApp, smooth: true,
+        symbol: 'circle', symbolSize: 6,
+        lineStyle: { width: 2, color: COLORS.green },
+        itemStyle: { color: COLORS.green },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(16,185,129,0.25)' },
+            { offset: 1, color: 'rgba(16,185,129,0.02)' }
+          ])
+        }
+      },
+      {
+        name: 'API调用', type: 'line', data: dataApi, smooth: true,
+        symbol: 'circle', symbolSize: 6,
+        lineStyle: { width: 2, color: COLORS.orange },
+        itemStyle: { color: COLORS.orange },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(245,158,11,0.2)' },
+            { offset: 1, color: 'rgba(245,158,11,0.02)' }
+          ])
+        }
+      }
+    ]
+  });
+})();
+
+// ==============================================================
+// 五、左侧 — 业务分类占比环形图
+// ==============================================================
+(function initDonutChart() {
+  const chart = initChart('chart-donut');
+  if (!chart) return;
+
+  const data = [
+    { value: 35, name: '电商业务' },
+    { value: 25, name: '金融业务' },
+    { value: 18, name: '社交业务' },
+    { value: 12, name: '广告业务' },
+    { value: 10, name: '其他业务' }
+  ];
+
+  chart.setOption({
+    tooltip: { ...tooltipStyle(), trigger: 'item' },
+    legend: {
+      orient: 'vertical',
+      right: 4, top: 'center',
+      textStyle: textStyle(11),
+      itemWidth: 10, itemHeight: 10,
+      itemGap: 10
+    },
+    series: [{
+      type: 'pie',
+      radius: ['55%', '78%'],
+      center: ['38%', '50%'],
+      avoidLabelOverlap: false,
+      itemStyle: {
+        borderColor: 'rgba(10,25,47,0.8)',
+        borderWidth: 3,
+        borderRadius: 4
+      },
+      label: {
+        show: true,
+        position: 'inside',
+        formatter: '{d}%',
+        fontSize: 11,
+        color: '#fff',
+        fontWeight: 600
+      },
+      emphasis: {
+        label: { fontSize: 16, fontWeight: 'bold' },
+        scaleSize: 10
+      },
+      data,
+      color: COLORS.palette
+    }]
+  });
+})();
+
+// ==============================================================
+// 六、中心 — 组合柱状折线图
+// ==============================================================
+(function initComboChart() {
+  const chart = initChart('chart-combo');
+  if (!chart) return;
+
+  const months = ['1月','2月','3月','4月','5月','6月','7月'];
+  const barData = genSeriesData(5000, 7, 0.3);
+  const lineData = genSeriesData(3200, 7, 0.2);
+
+  chart.setOption({
+    tooltip: { ...tooltipStyle(), trigger: 'axis' },
+    legend: {
+      right: 0, top: 0,
+      textStyle: textStyle(11),
+      itemWidth: 14, itemHeight: 8
+    },
+    grid: { left: 8, right: 8, top: 32, bottom: 4, containLabel: true },
+    xAxis: {
+      type: 'category', data: months,
+      axisLine: { lineStyle: { color: 'rgba(0,212,255,0.2)' } },
+      axisTick: { show: false },
+      axisLabel: textStyle(11)
+    },
+    yAxis: [
+      {
+        type: 'value', name: '销售额（万元）',
+        nameTextStyle: textStyle(10, '#667788'),
+        splitLine: { lineStyle: { color: 'rgba(0,212,255,0.08)' } },
+        axisLabel: textStyle(10)
+      },
+      {
+        type: 'value', name: '订单量（单）',
+        nameTextStyle: textStyle(10, '#667788'),
+        splitLine: { show: false },
+        axisLabel: textStyle(10)
+      }
+    ],
+    series: [
+      {
+        name: '销售额', type: 'bar', data: barData,
+        barWidth: 20,
+        itemStyle: {
+          borderRadius: [3, 3, 0, 0],
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(0,212,255,0.9)' },
+            { offset: 1, color: 'rgba(0,212,255,0.2)' }
+          ])
+        },
+        emphasis: {
+          itemStyle: { color: COLORS.blue }
+        }
+      },
+      {
+        name: '订单量', type: 'line', data: lineData, yAxisIndex: 1,
+        smooth: true, symbol: 'circle', symbolSize: 8,
+        lineStyle: { width: 3, color: COLORS.orange },
+        itemStyle: { color: COLORS.orange, borderColor: '#fff', borderWidth: 2 },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(245,158,11,0.2)' },
+            { offset: 1, color: 'rgba(245,158,11,0.01)' }
+          ])
+        }
+      }
+    ]
+  });
+})();
+
+// ==============================================================
+// 七、中心 — 中国地图省份热力分布
+// ==============================================================
+(function initMapChart() {
+  const chart = initChart('chart-map');
+  if (!chart) return;
+
+  // 省份模拟数据
+  const mapData = [
+    { name: '广东省', value: 98230 }, { name: '江苏省', value: 87540 },
+    { name: '浙江省', value: 79320 }, { name: '山东省', value: 75680 },
+    { name: '北京市', value: 72100 }, { name: '上海市', value: 69800 },
+    { name: '四川省', value: 65430 }, { name: '河南省', value: 59870 },
+    { name: '湖北省', value: 54320 }, { name: '福建省', value: 49800 },
+    { name: '湖南省', value: 46500 }, { name: '安徽省', value: 43200 },
+    { name: '河北省', value: 39800 }, { name: '陕西省', value: 36500 },
+    { name: '辽宁省', value: 34200 }, { name: '重庆市', value: 31800 },
+    { name: '江西省', value: 29500 }, { name: '广西', value: 27200 },
+    { name: '天津市', value: 25800 }, { name: '云南省', value: 23500 },
+    { name: '贵州省', value: 21200 }, { name: '山西省', value: 19800 },
+    { name: '吉林省', value: 17500 }, { name: '黑龙江省', value: 16200 },
+    { name: '甘肃省', value: 13800 }, { name: '内蒙古', value: 12500 },
+    { name: '新疆', value: 10800 }, { name: '海南省', value: 9200 },
+    { name: '宁夏', value: 7800 }, { name: '青海省', value: 6500 },
+    { name: '西藏', value: 4800 },
+    { name: '台湾省', value: 15000 }, { name: '香港', value: 11000 }, { name: '澳门', value: 6000 }
+  ];
+
+  function renderMap(geoJson) {
+    echarts.registerMap('china', geoJson);
+    chart.setOption({
+      tooltip: {
+        ...tooltipStyle(),
+        trigger: 'item',
+        formatter: function(p) {
+          return `<strong>${p.name}</strong><br/>数据指标：${fmt(p.value || 0)}`;
+        }
+      },
+      visualMap: {
+        min: 4000, max: 100000,
+        left: 8, bottom: 8,
+        text: ['高', '低'],
+        textStyle: { color: '#8899aa' },
+        inRange: {
+          color: ['#0a2a4a', '#0d4a7a', '#1a6daa', '#2d90da', '#4db8f0', '#80d4ff']
+        },
+        calculable: true
+      },
+      geo: {
+        map: 'china',
+        roam: false,
+        zoom: 1.2,
+        center: [105, 36],
+        label: { show: false },
+        emphasis: {
+          label: { show: true, color: '#fff', fontSize: 10 },
+          itemStyle: { areaColor: '#3a9ed8' }
+        },
+        itemStyle: {
+          areaColor: '#0d2a4a',
+          borderColor: 'rgba(0, 212, 255, 0.4)',
+          borderWidth: 1
+        }
+      },
+      series: [{
+        type: 'map',
+        map: 'china',
+        geoIndex: 0,
+        data: mapData
+      }]
+    });
+  }
+
+  // 优先从 localStorage 读取缓存，再尝试加载
+  const cached = localStorage.getItem('databoard_china_geo');
+  if (cached) {
+    try { renderMap(JSON.parse(cached)); } catch(e) { loadMap(); }
+  } else {
+    loadMap();
+  }
+
+  function loadMap() {
+    // 使用 DataV GeoAtlas CDN 加载中国地图 GeoJSON
+    fetch('https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json')
+      .then(r => r.json())
+      .then(geo => {
+        localStorage.setItem('databoard_china_geo', JSON.stringify(geo));
+        renderMap(geo);
+      })
+      .catch(() => {
+        // 备用：加载失败时显示提示
+        chart.setOption({
+          title: {
+            text: '地图数据加载中...\n请检查网络连接后刷新页面',
+            left: 'center', top: 'center',
+            textStyle: { color: '#8899aa', fontSize: 14 }
+          }
+        });
+        chart.setOption({
+          graphic: {
+            type: 'text',
+            left: 'center', top: '60%',
+            style: { text: '（需要网络加载中国地图 GeoJSON）', fill: '#556677', fontSize: 11 }
+          }
+        });
+      });
+  }
+})();
+
+// ==============================================================
+// 八、右侧 — 城市数据 TOP10 排行榜
+// ==============================================================
+(function initRankChart() {
+  const chart = initChart('chart-rank');
+  if (!chart) return;
+
+  const cities = ['上海', '北京', '深圳', '广州', '杭州', '成都', '武汉', '南京', '重庆', '苏州'];
+  const values = [98500, 94200, 87600, 82300, 78900, 71200, 65400, 59800, 54300, 49200];
+
+  chart.setOption({
+    tooltip: { ...tooltipStyle(), trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: 60, right: 30, top: 4, bottom: 4 },
+    xAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: 'rgba(0,212,255,0.06)' } },
+      axisLabel: textStyle(9)
+    },
+    yAxis: {
+      type: 'category',
+      data: cities.reverse(),
+      inverse: true,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { ...textStyle(10), fontWeight: 500 },
+      animationDuration: 300,
+      animationDurationUpdate: 300
+    },
+    series: [{
+      type: 'bar',
+      data: values.reverse().map((v, i) => ({
+        value: v,
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+            { offset: 0, color: COLORS.palette[i % COLORS.palette.length] },
+            { offset: 1, color: 'rgba(0,212,255,0.15)' }
+          ]),
+          borderRadius: [0, 4, 4, 0]
+        }
+      })),
+      barWidth: 14,
+      label: {
+        show: true, position: 'right',
+        color: '#c0d0e0', fontSize: 10,
+        formatter: p => fmt(p.value)
+      },
+      emphasis: {
+        barWidth: 20,
+        label: { fontSize: 12, fontWeight: 'bold' }
+      }
+    }]
+  });
+})();
+
+// ==============================================================
+// 九、右侧 — 渠道来源雷达图
+// ==============================================================
+(function initRadarChart() {
+  const chart = initChart('chart-radar');
+  if (!chart) return;
+
+  chart.setOption({
+    tooltip: { ...tooltipStyle() },
+    legend: {
+      bottom: 0,
+      textStyle: textStyle(10),
+      itemWidth: 12, itemHeight: 8
+    },
+    radar: {
+      center: ['50%', '48%'],
+      radius: '62%',
+      indicator: [
+        { name: '直接访问', max: 100 },
+        { name: '搜索引擎', max: 100 },
+        { name: '社交媒体', max: 100 },
+        { name: '邮件营销', max: 100 },
+        { name: '广告投放', max: 100 },
+        { name: '渠道合作', max: 100 }
+      ],
+      axisName: { color: '#8899aa', fontSize: 10 },
+      splitArea: {
+        areaStyle: { color: ['rgba(0,212,255,0.02)', 'rgba(0,212,255,0.02)'] }
+      },
+      splitLine: { lineStyle: { color: 'rgba(0,212,255,0.12)' } },
+      axisLine: { lineStyle: { color: 'rgba(0,212,255,0.15)' } }
+    },
+    series: [{
+      type: 'radar',
+      data: [{
+        name: '本周',
+        value: [92, 68, 78, 45, 72, 58],
+        symbol: 'circle', symbolSize: 5,
+        lineStyle: { color: COLORS.blue, width: 2 },
+        areaStyle: { color: 'rgba(0,212,255,0.15)' },
+        itemStyle: { color: COLORS.blue }
+      }, {
+        name: '上周',
+        value: [85, 62, 70, 48, 65, 52],
+        symbol: 'circle', symbolSize: 5,
+        lineStyle: { color: COLORS.purple, width: 2, type: 'dashed' },
+        areaStyle: { color: 'rgba(124,58,237,0.1)' },
+        itemStyle: { color: COLORS.purple }
+      }]
+    }]
+  });
+})();
+
+// ==============================================================
+// 十、KPI 卡片数据 & 顶部指标
+// ==============================================================
+
+/** 卡片目标值 */
+const cardTargets = {
+  'card-new-users': 12580,
+  'card-orders':    8642,
+  'card-msgs':      3215,
+  'card-rate':      98.6
+};
+
+/** 顶部KPI目标值 */
+const headerTargets = {
+  'kpi-visits': { val: 1285430, fmt: true },
+  'kpi-sales':  { val: 86542100, fmt: true },
+  'kpi-users':  { val: 52880, fmt: true }
+};
+
+/** 启动数字滚动动画 */
+function animateAllNumbers() {
+  Object.entries(cardTargets).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) animateNumber(el, val, 1500);
+  });
+  Object.entries(headerTargets).forEach(([id, cfg]) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = '0';
+      animateNumber(el, cfg.val, 1800);
+    }
+  });
+}
+// 延迟执行，让页面先渲染
+setTimeout(animateAllNumbers, 300);
+
+// ==============================================================
+// 十一、数据刷新（每30秒模拟更新）
+// ==============================================================
+function refreshData() {
+  // 更新底部时间戳
+  const now = new Date();
+  document.getElementById('update-time').textContent =
+    now.toLocaleTimeString('zh-CN', { hour12: false });
+
+  // 给每个图表做微小数据波动更新（仅更新已有实例）
+  Object.values(charts).forEach(c => {
+    if (c && c.getOption) {
+      try {
+        const opt = c.getOption();
+        if (opt.series && opt.series.length > 0) {
+          opt.series.forEach((s, si) => {
+            if (s.type === 'line' && s.data && Array.isArray(s.data)) {
+              // 折线图：最后一点轻微波动
+              const last = s.data[s.data.length - 1];
+              if (typeof last === 'number') {
+                const newVal = Math.round(last * (1 + (Math.random() - 0.5) * 0.04));
+                c.setOption({ series: [{ data: s.data.slice(0, -1).concat(newVal) }] });
+              }
+            }
+          });
+        }
+      } catch(e) { /* 部分图表不支持此操作，忽略 */ }
+    }
+  });
+}
+// 初始化更新时间
+document.getElementById('update-time').textContent =
+  new Date().toLocaleTimeString('zh-CN', { hour12: false });
+// 每30秒刷新
+setInterval(refreshData, 30000);
+
+// ==============================================================
+// 十二、自适应缩放 — 等比缩放适配任意屏幕
+// ==============================================================
+function resizeApp() {
+  const app = document.getElementById('app');
+  const ww = window.innerWidth;
+  const wh = window.innerHeight;
+  const scaleX = ww / 1920;
+  const scaleY = wh / 1080;
+  const scale = Math.min(scaleX, scaleY);
+  app.style.transform = `scale(${scale})`;
+}
+
+window.addEventListener('resize', () => {
+  resizeApp();
+  // 同时触发所有图表 resize
+  Object.values(charts).forEach(c => { if (c && c.resize) c.resize(); });
+});
+
+// 初始缩放
+resizeApp();
+
+// ==============================================================
+// 十三、键盘快捷键 — ESC 退出全屏提示
+// ==============================================================
+console.log(
+  '%c🚀 DataBoard 数据看板已就绪 %c| %cMIT License',
+  'color:#00d4ff;font-size:16px;',
+  '',
+  'color:#8899aa;'
+);
+console.log('%c按 F11 进入全屏模式获得最佳体验', 'color:#10b981;');
+</script>
+</body>
+</html>
