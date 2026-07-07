@@ -35,7 +35,7 @@ DataBoard（数据看板）是一个开源的数据可视化大屏项目，旨�
 
 ```bash
 # 克隆项目
-git clone https://github.com/millxasn/DataBoard.git
+git clone https://github.com/orangebear1024/DataBoard.git
 
 # 进入目录
 cd DataBoard
@@ -88,5 +88,5 @@ npm run dev
 ---
 
 <p align="center">
-  <sub>Made with ❤️ by <a href="https://github.com/millxasn">millxasn</a> and contributors</sub>
+  <sub>Made with ❤️ by <a href="https://github.com/orangebear1024">orangebear1024</a> and contributors</sub>
 </p>
