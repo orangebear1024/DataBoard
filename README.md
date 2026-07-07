@@ -79,7 +79,10 @@ npm run dev
 2. 创建你的特性分支 (`git checkout -b feature/amazing-feature`)
 3. 提交你的更改 (`git commit -m 'feat: add amazing feature'`)
 4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 创建一个 Pull Request
+6. 创建一个 Pull Request
+
+界面展示
+<img width="2134" height="1485" alt="image" src="https://github.com/user-attachments/assets/f46f4ade-b847-44ac-87a4-2fc4fcd4506a" />
 
 ## 📄 开源协议
 
